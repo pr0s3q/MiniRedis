@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <iostream>
+#include <print>
 #include <thread>
 
 #include <sys/socket.h>
@@ -12,6 +13,7 @@
 // Docs from
 // https://pubs.opengroup.org/onlinepubs/9799919799/
 //
+
 
 namespace
 {
@@ -37,35 +39,8 @@ namespace
             perror("close");
     }
 
-    void HandleClient(const int clientFileDescriptor)
+    int SendResponse(const int fileDescriptor)
     {
-        //
-        // recv - receive a message from a connected socket
-        //
-        // why "sizeof(buffer) - 1"
-        // The - 1 leaves the last byte as the 0 from {},
-        // because recv() does not add a terminator and "std::cout << buffer" needs one.
-        //
-        // Return - Upon successful completion, recv() shall return the length of the message in bytes.
-        // If no messages are available to be received and the peer has performed an orderly shutdown, recv() shall return 0.
-        // Otherwise, -1 shall be returned and errno set to indicate the error.
-        //
-        char buffer[256]{};
-        const ssize_t receiveResult = recv(clientFileDescriptor, buffer, sizeof(buffer) - 1, 0);
-        if (receiveResult < 0)
-        {
-            HandleError(clientFileDescriptor, "recv");
-            return;
-        }
-
-        if (receiveResult == 0)
-        {
-            Close(clientFileDescriptor);
-            return;
-        }
-
-        std::cout << buffer << '\n';
-
         //
         // send - send a message on a socket
         //
@@ -77,22 +52,101 @@ namespace
         //
         constexpr char successfulResponse[] = "OK\n";
         constexpr std::size_t successfulResLen = sizeof(successfulResponse) - 1;
-        const ssize_t sendResult = send(clientFileDescriptor, successfulResponse, successfulResLen, MSG_NOSIGNAL);
+        const ssize_t sendResult = send(fileDescriptor, successfulResponse, successfulResLen, MSG_NOSIGNAL);
         if (sendResult < 0)
         {
-            HandleError(clientFileDescriptor, "send");
-            return;
+            HandleError(fileDescriptor, "send");
+            return -1;
         }
 
         if (sendResult < successfulResLen)
         {
-            std::cerr << "send: partial write, sent " << sendResult
-                      << " of " << successfulResLen << " bytes\n";
-            Close(clientFileDescriptor);
-            return;
+            std::print(std::cerr, "send: partial write, sent {} of {} bytes\n", sendResult, successfulResLen);
+            Close(fileDescriptor);
+            return -1;
         }
 
-        Close(clientFileDescriptor);
+        return 0;
+    }
+
+    void HandleClient(const int clientFileDescriptor)
+    {
+        while (true)
+        {
+            //
+            // recv - receive a message from a connected socket
+            //
+            // why "sizeof(buffer) - 1"
+            // The - 1 leaves the last byte as the 0 from {},
+            // because recv() does not add a terminator and "std::cout << buffer" needs one.
+            //
+            // Return - Upon successful completion, recv() shall return the length of the message in bytes.
+            // If no messages are available to be received and the peer has performed an orderly shutdown, recv() shall return 0.
+            // Otherwise, -1 shall be returned and errno set to indicate the error.
+            //
+            constexpr std::size_t bufferSize {20};
+            char buffer[bufferSize]{};
+            std::string message{};
+            std::string command{};
+            message.reserve(bufferSize);
+            while (true)
+            {
+                const ssize_t receiveResult = recv(clientFileDescriptor, buffer, sizeof(buffer), 0);
+                if (receiveResult < 0)
+                {
+                    HandleError(clientFileDescriptor, "recv");
+                    return;
+                }
+
+                if (receiveResult == 0)
+                {
+#ifdef LOGS
+                    std::print("\033[32mClient disconnected\033[0m\n");
+#endif
+                    Close(clientFileDescriptor);
+                    return;
+                }
+
+                message.append(buffer, static_cast<std::size_t>(receiveResult));
+
+                std::size_t pos = message.find('\n');
+                if (pos == std::string::npos)
+                {
+                    // No new line character - call recv again
+#ifdef LOGS
+                    std::print("\033[93mPartial message: {}\033[0m\n", message);
+#endif
+                    command.append(message);
+                    message.clear();
+                    continue;
+                }
+
+                // New line character
+                while (pos != std::string::npos)
+                {
+                    command.append(message.substr(0, pos));
+                    message.erase(0, pos + 1);
+                    std::print("{}\n", command);
+
+                    // Don't close the file descriptor if SendResponse returns -1 (failure)
+                    // SendResponse have implemented error handling and connection closing
+                    if (SendResponse(clientFileDescriptor) < 0)
+                        return;
+
+                    command.clear();
+
+                    if (message.empty())
+                        break;
+
+                    pos = message.find('\n');
+                }
+
+                if (!message.empty())
+                    continue;
+
+                break;
+            }
+        }
     }
 }
 
