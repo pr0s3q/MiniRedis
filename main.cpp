@@ -76,15 +76,11 @@ namespace
             //
             // recv - receive a message from a connected socket
             //
-            // why "sizeof(buffer) - 1"
-            // The - 1 leaves the last byte as the 0 from {},
-            // because recv() does not add a terminator and "std::cout << buffer" needs one.
-            //
             // Return - Upon successful completion, recv() shall return the length of the message in bytes.
             // If no messages are available to be received and the peer has performed an orderly shutdown, recv() shall return 0.
             // Otherwise, -1 shall be returned and errno set to indicate the error.
             //
-            constexpr std::size_t bufferSize {20};
+            constexpr std::size_t bufferSize {256};
             char buffer[bufferSize]{};
             std::string message{};
             std::string command{};
