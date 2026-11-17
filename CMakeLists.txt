@@ -5,7 +5,11 @@ set(CMAKE_CXX_STANDARD 26)
 
 option(LOGS "Enable logs" ON)
 
-add_executable(MiniRedis main.cpp)
+include_directories(MiniRedis PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.cpp")
+
+add_executable(MiniRedis main.cpp ${SOURCES})
 
 if(LOGS)
     target_compile_definitions(MiniRedis PRIVATE LOGS)
