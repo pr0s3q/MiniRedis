@@ -3,6 +3,8 @@
 #include <TaskQueue.hpp>
 #include <TcpConnection.hpp>
 
+#include <thread>
+
 ThreadPool::ThreadPool(TaskQueue& taskQueue)
     : m_taskQueue(taskQueue)
 {

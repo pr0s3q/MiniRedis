@@ -1,14 +1,16 @@
-#include <sys/socket.h>
-
 #include <netinet/in.h>
+#include <sys/socket.h>
+// NOLINTNEXTLINE(modernize-deprecated-headers)
+#include <signal.h>
 
+#include <cerrno>
 #include <csignal>
-#include <print>
 
 #include <TcpConnection.hpp>
 #include <TcpServer.hpp>
 #include <TaskQueue.hpp>
 #include <ThreadPool.hpp>
+#include <Logger.hpp>
 
 //
 // Docs from
@@ -17,9 +19,10 @@
 
 namespace
 {
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
     std::sig_atomic_t stopRequested = 0;
 
-    void OnSignal(int)
+    void OnSignal(int /*unused*/)
     {
         stopRequested = 1;
     }
@@ -50,12 +53,13 @@ int main()
     while (true)
     {
         socklen_t addressLength = sizeof(address);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         const int socketFileDescriptor = accept(fileDescriptor, reinterpret_cast<sockaddr*>(&address), &addressLength);
         if (socketFileDescriptor < 0)
         {
             if (errno == EINTR && stopRequested != 0)
             {
-                std::print("\033[93mServer terminated!\033[0m\n");
+                Logger::LogInformation("Server terminated!");
                 break;
             }
 

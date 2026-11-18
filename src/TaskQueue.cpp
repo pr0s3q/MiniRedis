@@ -1,5 +1,8 @@
 #include <TaskQueue.hpp>
 
+#include <mutex>
+#include <optional>
+
 void TaskQueue::Push(const int clientDescriptor)
 {
     std::unique_lock lock{ m_queueMutex };

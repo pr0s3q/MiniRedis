@@ -1,18 +1,19 @@
 #include <TcpConnection.hpp>
 
+#include <array>
 #include <cstddef>
-#include <iostream>
-#include <print>
 #include <string>
+#include <string_view>
+#include <utility>
 
 #include <sys/socket.h>
-
+#include <sys/types.h>
 #include <unistd.h>
+
+#include <Logger.hpp>
 
 namespace
 {
-    void Close(int);
-
     void Close(const int fileDescriptor)
     {
         //
@@ -23,7 +24,7 @@ namespace
         //
         const int closeResult = close(fileDescriptor);
         if (closeResult < 0)
-            perror("close");
+            Logger::LogError("close");
     }
 
     int SendResponse(const int fileDescriptor)
@@ -37,18 +38,18 @@ namespace
         // Return - Upon successful completion, send() shall return the number of bytes sent.
         // Otherwise, -1 shall be returned and errno set to indicate the error.
         //
-        constexpr char successfulResponse[] = "OK\n";
-        constexpr std::size_t successfulResLen = sizeof(successfulResponse) - 1;
-        const ssize_t sendResult = send(fileDescriptor, successfulResponse, successfulResLen, MSG_NOSIGNAL);
+        constexpr std::string_view successfulResponse = "OK\n";
+        constexpr std::size_t successfulResLen = successfulResponse.size();
+        const ssize_t sendResult = send(fileDescriptor, successfulResponse.data(), successfulResLen, MSG_NOSIGNAL);
         if (sendResult < 0)
         {
             TcpConnection::HandleError(fileDescriptor, "send");
             return -1;
         }
 
-        if (sendResult < successfulResLen)
+        if (std::cmp_less(sendResult, successfulResLen))
         {
-            std::print(std::cerr, "send: partial write, sent {} of {} bytes\n", sendResult, successfulResLen);
+            Logger::LogError("send: partial write, sent {} of {} bytes", sendResult, successfulResLen);
             Close(fileDescriptor);
             return -1;
         }
@@ -71,13 +72,13 @@ namespace TcpConnection
             // Otherwise, -1 shall be returned and errno set to indicate the error.
             //
             constexpr std::size_t bufferSize {256};
-            char buffer[bufferSize]{};
+            std::array<char, bufferSize> buffer{};
             std::string message{};
             std::string command{};
             message.reserve(bufferSize);
             while (true)
             {
-                const ssize_t receiveResult = recv(clientFileDescriptor, buffer, sizeof(buffer), 0);
+                const ssize_t receiveResult = recv(clientFileDescriptor, buffer.data(), sizeof(buffer), 0);
                 if (receiveResult < 0)
                 {
                     HandleError(clientFileDescriptor, "recv");
@@ -87,20 +88,20 @@ namespace TcpConnection
                 if (receiveResult == 0)
                 {
 #ifdef LOGS
-                    std::print("\033[32mClient disconnected\033[0m\n");
+                    Logger::LogSuccess("Client disconnected");
 #endif
                     Close(clientFileDescriptor);
                     return;
                 }
 
-                message.append(buffer, static_cast<std::size_t>(receiveResult));
+                message.append(buffer.data(), static_cast<std::size_t>(receiveResult));
 
                 std::size_t pos = message.find('\n');
                 if (pos == std::string::npos)
                 {
                     // No new line character - call recv again
 #ifdef LOGS
-                    std::print("\033[93mPartial message: {}\033[0m\n", message);
+                    Logger::LogInformation("Partial message: {}", message);
 #endif
                     command.append(message);
                     message.clear();
@@ -112,7 +113,7 @@ namespace TcpConnection
                 {
                     command.append(message.substr(0, pos));
                     message.erase(0, pos + 1);
-                    std::print("{}\n", command);
+                    Logger::LogMessage("{}", command);
 
                     // Don't close the file descriptor if SendResponse returns -1 (failure)
                     // SendResponse have implemented error handling and connection closing
@@ -137,7 +138,7 @@ namespace TcpConnection
 
     int HandleError(const int fileDescriptor, const char* str)
     {
-        perror(str);
+        Logger::LogError(str);
         Close(fileDescriptor);
         return -1;
     }

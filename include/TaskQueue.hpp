@@ -21,8 +21,8 @@ public:
     TaskQueue& operator=(TaskQueue&& other) = delete;
 
 private:
-    std::queue<int> m_clientDescriptorQueue{};
-    std::mutex m_queueMutex{};
-    std::condition_variable m_cv{};
+    std::queue<int> m_clientDescriptorQueue;
+    std::mutex m_queueMutex;
+    std::condition_variable m_cv;
     bool m_stop{};
 };

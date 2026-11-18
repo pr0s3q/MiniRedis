@@ -1,11 +1,11 @@
 #include <TcpServer.hpp>
 
-#include <cstdio>
+#include <cstdint>
 
 #include <netinet/in.h>
-
 #include <sys/socket.h>
 
+#include <Logger.hpp>
 #include <TcpConnection.hpp>
 
 namespace TcpServer
@@ -25,7 +25,7 @@ namespace TcpServer
         const int fileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
         if (fileDescriptor < 0)
         {
-            perror("socket");
+            Logger::LogError("socket");
             return fileDescriptor;
         }
 
@@ -34,8 +34,9 @@ namespace TcpServer
         // Port 60000
         // INADDR_LOOPBACK - 127.0.0.1
         //
+        constexpr uint16_t port = 60000;
         address.sin_family = AF_INET;
-        address.sin_port = htons(60000);
+        address.sin_port = htons(port);
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
         //
@@ -44,6 +45,7 @@ namespace TcpServer
         // Return - Upon successful completion, bind() shall return 0;
         // otherwise, -1 shall be returned and errno set to indicate the error.
         //
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         const int bindRes = bind(fileDescriptor, reinterpret_cast<sockaddr*>(&address), sizeof(address));
         if (bindRes < 0)
             return TcpConnection::HandleError(fileDescriptor, "bind");
